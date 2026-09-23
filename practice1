@@ -108,3 +108,27 @@ archive_name="archive_${ext}.tar"
 find "$dir" -type f -name "*.${ext}" -print0 | tar -cvf "$archive_name" --null -T -
 
 echo "файлы .tar: $ext заархивированы - $archive_name"
+
+
+Задание 9:
+
+#!/bin/bash
+
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <input_file> <output_file>" >&2
+    exit 1
+fi
+
+input="$1"
+output="$2"
+
+awk '{ gsub(/ {4}/, "\t"); print }' "$input" > "$output"
+
+echo "Готово: $input -> $output"
+
+Задание 10:
+
+
+
