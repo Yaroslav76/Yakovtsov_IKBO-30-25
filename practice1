@@ -1,0 +1,110 @@
+Задача 1:
+grep -o '^[^:]*' /etc/passwd | sort
+
+
+Задача 2:
+grep -v '^#' /etc/protocols | grep -v '^$' | awk '{print $2, $1}' | sort -rn | head -5
+
+
+
+Задача 3:
+
+
+
+Задача 4:
+#!/bin/bash
+
+grep -oE '[A-Za-z_][A-Za-z0-9_]*' "$1" | sort -u | tr '\n' ' '
+echo
+
+
+
+
+Задача 5:
+#!/bin/bash
+
+program="$1"
+
+chmod +x "$program"
+sudo cp "$program" /usr/local/bin/
+
+echo "$program зарегистрирован"
+
+
+
+
+Задача 6:
+#!/bin/bash
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <directory>"
+    exit 1
+fi
+
+dir="$1"
+
+for file in $(find "$dir" -name "*.c" -o -name "*.js" -o -name "*.py"); do
+    first_line=$(head -n 1 "$file")
+    ext="${file##*.}"
+
+    if [ "$ext" = "py" ]; then
+        if [[ "$first_line" == \#* ]]; then
+            echo "OK: $file"
+        else
+            echo "NO: $file"
+        fi
+    else
+        if [[ "$first_line" == //* || "$first_line" == /\** ]]; then
+            echo "OK: $file"
+        else
+            echo "NO: $file"
+        fi
+    fi
+done
+
+
+
+
+Задача 7:
+#!/bin/bash
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <path>"
+    exit 1
+fi
+
+find "$1" -type f -exec md5sum {} \; 2>/dev/null > /tmp/hashes.txt
+sort /tmp/hashes.txt > /tmp/hashes_sorted.txt
+awk '{print $1}' /tmp/hashes_sorted.txt | uniq -d > /tmp/dup_hashes.txt
+
+while read -r hash; do
+    echo "Дубликаты (hash $hash):"
+    grep "^$hash" /tmp/hashes_sorted.txt
+    echo
+done < /tmp/dup_hashes.txt
+
+rm /tmp/hashes.txt /tmp/hashes_sorted.txt /tmp/dup_hashes.txt
+
+
+Задача 8:
+
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <directory> <extension>" >&2
+    exit 1
+fi
+
+dir="$1"
+ext="$2"
+
+if [ ! -d "$dir" ]; then
+    echo "Error: '$dir' is not a directory" >&2
+    exit 1
+fi
+
+archive_name="archive_${ext}.tar"
+
+find "$dir" -type f -name "*.${ext}" -print0 | tar -cvf "$archive_name" --null -T -
+
+echo "файлы .tar: $ext заархивированы - $archive_name"
