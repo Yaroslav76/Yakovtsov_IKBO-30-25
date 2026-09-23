@@ -130,5 +130,19 @@ echo "Готово: $input -> $output"
 
 Задание 10:
 
+#!/bin/bash
 
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <directory>" >&2
+    exit 1
+fi
+
+dir="$1"
+
+if [ ! -d "$dir" ]; then
+    echo "Error: '$dir' is not a directory" >&2
+    exit 1
+fi
+
+find "$dir" -type f -empty
 
