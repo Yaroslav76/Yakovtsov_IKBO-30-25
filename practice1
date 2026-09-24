@@ -8,7 +8,20 @@ grep -v '^#' /etc/protocols | grep -v '^$' | awk '{print $2, $1}' | sort -rn | h
 
 
 Задача 3:
+#!/bin/bash
 
+
+text="$1"
+len=${#text}
+
+line=""
+for ((i=0; i<len+2; i++)); do
+    line="$line-"
+done
+
+echo "+$line+"
+echo "| $text |"
+echo "+$line+"
 
 
 Задача 4:
