@@ -790,3 +790,43 @@ def repl(shell):
             out(line)
         shell.execute(line)
 
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Эмулятор оболочки UNIX-подобной ОС")
+    parser.add_argument("--vfs", metavar="PATH", help="ZIP-архив с VFS")
+    parser.add_argument("--script", metavar="PATH", help="стартовый скрипт")
+    args = parser.parse_args()
+    for stream in (sys.stdout, sys.stderr):
+        if not stream.isatty():
+            stream.reconfigure(encoding="utf-8")
+
+    # отладочный вывод всех параметров
+    out("[debug] Параметры запуска:")
+    out(f"[debug]   --vfs    = {args.vfs or '(не задан)'}")
+    out(f"[debug]   --script = {args.script or '(не задан)'}")
+
+    if args.vfs is None:
+        vfs = default_vfs()
+        out("[debug] VFS не указана: создана VFS по умолчанию в памяти")
+    else:
+        try:
+            vfs = load_zip(args.vfs)
+        except VFSError as e:
+            err(f"Ошибка загрузки VFS: {e}")
+            return 1
+    dirs, files, size = vfs.stats()
+    out(f"[debug]   имя VFS = {vfs.name}; каталогов: {dirs}, файлов: {files}, байт: {size}")
+
+    shell = Shell(vfs)
+    try:
+        if args.script is not None and not run_script(shell, args.script):
+            return 1
+        return repl(shell)
+    except Exit as e:
+        return e.code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
