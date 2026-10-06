@@ -1,9 +1,7 @@
 # Эмулятор оболочки UNIX-подобной ОС (вариант 30)
 
-Консольное приложение на Python 3.8+ (только стандартная библиотека), имитирующее работу в командной строке UNIX.
-Файловая система — виртуальная (VFS), целиком в памяти; источник VFS — ZIP-архив.
-
-## Быстрый старт
+Консольное приложение на Python 3.8+ (только стандартная библиотека). Имитирует командную строку UNIX; файловая
+система — виртуальная (VFS), целиком в памяти, источник — ZIP-архив.
 
 ```text
 python3 emulator.py [--vfs PATH] [--script PATH]      # на Windows: python emulator.py ...
@@ -14,98 +12,72 @@ python3 emulator.py [--vfs PATH] [--script PATH]      # на Windows: python emu
 | `--vfs PATH` | ZIP-архив с VFS; если не указан — VFS по умолчанию создаётся в памяти |
 | `--script PATH` | стартовый скрипт: команды выполняются с показом ввода и вывода, остановка на первой ошибке |
 
-Команды: `ls`, `cd`, `cal`, `tail`, `mv`, `exit`, служебная `vfs-info`.
-Пример: `python3 emulator.py --vfs tests/vfs/deep.zip` (интерактивно) или
-`python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu`.
-
-## Структура проекта
+## Структура
 
 ```text
-emulator.py        точка входа: парсер, REPL, параметры, стартовые скрипты
-commands.py        команды ls, cd, cal, tail, mv, exit, vfs-info
-vfs.py             VFS в памяти, загрузка из ZIP
-scripts/*.emu      стартовые скрипты эмулятора
-tests/test_stage2.sh, test_stage3.sh   скрипты реальной ОС, вызывающие эмулятор
-tests/stage1.in    ввод для демонстрации этапа 1
-tests/make_vfs.py  генератор тестовых VFS; готовые архивы — в tests/vfs/
+emulator.py   оболочка: разбор строки, REPL, параметры, скрипты и все команды (ls, cd, cal, tail, mv, exit)
+vfs.py        VFS в памяти: каталог — dict, файл — bytes; загрузка из ZIP
+scripts/      стартовые скрипты эмулятора (*.emu)
+tests/        скрипты реальной ОС (test_stage2.sh, test_stage3.sh), tests/vfs/*.zip — тестовые VFS,
+              make_vfs.py — их генератор
 ```
 
-Все демонстрации ниже — реальный вывод; команда запуска указана в каждом разделе.
-Строки стартовых скриптов, начинающиеся с `-`, — «ожидаемые ошибки» (см. этап 3).
+Строка скрипта, начинающаяся с `-`, — «ожидаемая ошибка»: она выполняется, ошибка показывается, но скрипт идёт дальше
+(иначе в одном скрипте нельзя показать несколько ошибок). Обычная ошибка останавливает скрипт.
 
 ---
 
 ## Этап 1. REPL
 
-**Что сделано**
+- Приглашение содержит имя VFS и текущий каталог: `default:/$ `.
+- Разбор строки: `shlex.split` (пробелы, кавычки, комментарии `#`) и `os.path.expandvars` — подстановка
+  переменных окружения реальной ОС (`$HOME`, `${USER}`). Неизвестная переменная остаётся как есть.
+  Подстановка выполняется во всём аргументе, в том числе в кавычках (упрощение: в bash внутри `'...'` её нет).
+- Команда `exit [код]`, Ctrl+D — выход, Ctrl+C — отмена строки.
+- Ошибки: неизвестная команда (код 127), незакрытая кавычка, `exit` с нечисловым или лишним аргументом.
+- Ввод из файла/канала дублируется в вывод (удобно для демонстрации).
 
-- CLI-приложение с циклом «приглашение → ввод → выполнение». Приглашение содержит имя VFS: `default:/$ `.
-- Парсер строки (`tokenize` в `emulator.py`): разделение по пробелам, кавычки `'...'` (без раскрытия) и `"..."`
-  (с раскрытием), экранирование `\`, комментарии `#`, раскрытие переменных окружения реальной ОС:
-  `$HOME`, `${HOME}`. Неопределённая переменная раскрывается в пустую строку (пустой аргумент без кавычек исчезает,
-  как в bash). На Windows `$HOME` при отсутствии `HOME` берётся из `USERPROFILE`.
-- Команды-заглушки `ls`, `cd` печатают своё имя и аргументы. Команда `exit [код]` завершает эмулятор.
-- Ошибки: неизвестная команда (код 127), незакрытая кавычка, неверная подстановка `${1bad}`,
-  `exit` с нечисловым или лишним аргументом. Ctrl+D (EOF) — выход, Ctrl+C — отмена строки.
-- Если ввод идёт не с терминала (канал/файл), введённые строки дублируются в вывод — так удобно показывать диалог.
-
-**Демонстрация** (`HOME=/home/rid USER=rid python3 emulator.py < tests/stage1.in`):
+Демонстрация (`HOME=/home/rid USER=rid python3 emulator.py < tests/stage1.in`):
 
 ```text
 [debug] Параметры запуска:
 [debug]   --vfs    = (не задан)
 [debug]   --script = (не задан)
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
 default:/$ ls
 etc  home  tmp
-default:/$ ls -l /tmp "my dir"
-ls: cannot access 'my dir': No such file or directory
-/tmp:
-default:/$ cd /home
-default:/home$ ls $HOME ${USER} "$HOME/x" '$HOME' \$HOME
+default:/$ ls -l /home
+d  4096 user
+default:/$ cd home/user
+default:/home/user$ ls $HOME ${USER} "$HOME/x" '$NO_EXPANSION'
 ls: cannot access '/home/rid': No such file or directory
 ls: cannot access 'rid': No such file or directory
 ls: cannot access '/home/rid/x': No such file or directory
-ls: cannot access '$HOME': No such file or directory
-ls: cannot access '$HOME': No such file or directory
-default:/home$ ls $NOPE_UNDEFINED a
-ls: cannot access 'a': No such file or directory
-default:/home$ ls "$HOME and ${USER}"
-ls: cannot access '/home/rid and rid': No such file or directory
-default:/home$ cd
+ls: cannot access '$NO_EXPANSION': No such file or directory
+default:/home/user$ cd
 default:/$ # комментарий
 default:/$ foo bar
 foo: command not found
 default:/$ ls "незакрытая
-parse error: unexpected EOF while looking for matching `"'
-default:/$ ls ${1bad}
-parse error: bad substitution
+parse error: No closing quotation
 default:/$ exit abc
 exit: abc: numeric argument required
 default:/$ exit 1 2
 exit: too many arguments
 default:/$ exit 3
+[код возврата: 3]
 ```
-
----
 
 ## Этап 2. Конфигурация
 
-**Что сделано**
+- Параметры `--vfs PATH` и `--script PATH` (`argparse`), при запуске печатается отладочный вывод всех параметров.
+- Стартовый скрипт: каждая строка показывается с приглашением, затем её вывод; остановка на первой ошибке
+  (с номером строки). После скрипта эмулятор переходит в интерактивный режим; `exit` в скрипте завершает его.
+  Нечитаемый скрипт — код возврата 1.
+- Скрипт реальной ОС: `tests/test_stage2.sh` — все сочетания параметров, включая ошибочные.
 
-- Параметры командной строки: `--vfs PATH` (путь к физическому расположению VFS) и `--script PATH`
-  (путь к стартовому скрипту). Оба необязательны. На этом этапе VFS только передаётся в приложение
-  (загрузка — этап 3).
-- При запуске печатается отладочный вывод всех заданных параметров (`[debug] ...`).
-- Стартовый скрипт (`*.emu`): каждая непустая строка показывается с приглашением, затем её вывод — получается
-  имитация диалога. Скрипт **останавливается при первой ошибке** (ненулевой код возврата команды, ошибка разбора,
-  неизвестная команда); выводится номер строки. После скрипта (в т. ч. после ошибки) эмулятор переходит в
-  интерактивный режим; `exit` в скрипте завершает эмулятор сразу. Нечитаемый скрипт — код возврата 1.
-- Тестовый скрипт реальной ОС `tests/test_stage2.sh` —
-  вызывает эмулятор со всеми сочетаниями параметров, включая ошибочные. Стартовые скрипты — в `scripts/`.
-
-**Демонстрация** (`bash tests/test_stage2.sh`, интерактивный режим закрывается EOF из `/dev/null`):
+Демонстрация (`bash tests/test_stage2.sh`):
 
 ```text
 
@@ -114,7 +86,7 @@ $ python3 emulator.py
 [debug]   --vfs    = (не задан)
 [debug]   --script = (не задан)
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
 default:/$ exit
 [код возврата: 0]
 
@@ -131,12 +103,20 @@ $ python3 emulator.py --script scripts/stage2_ok.emu
 [debug]   --vfs    = (не задан)
 [debug]   --script = scripts/stage2_ok.emu
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
-default:/$ # Стартовый скрипт этапа 2: ошибок нет
-default:/$ ls -l /tmp
-default:/$ cd "/home/$USER"
-cd: /home/rid: No such file or directory
-Скрипт остановлен: ошибка в строке 3 (код 1)
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
+default:/$ # Скрипт без ошибок (работает с любой VFS)
+default:/$ ls
+etc  home  tmp
+default:/$ ls -a
+.  ..  etc  home  tmp
+default:/$ cal 2 2024
+   February 2024
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29
 default:/$ exit
 [код возврата: 0]
 
@@ -145,10 +125,19 @@ $ python3 emulator.py --vfs tests/vfs/minimal.zip --script scripts/stage2_ok.emu
 [debug]   --vfs    = tests/vfs/minimal.zip
 [debug]   --script = scripts/stage2_ok.emu
 [debug]   имя VFS = minimal; каталогов: 0, файлов: 1, байт: 12
-minimal:/$ # Стартовый скрипт этапа 2: ошибок нет
-minimal:/$ ls -l /tmp
-ls: cannot access '/tmp': No such file or directory
-Скрипт остановлен: ошибка в строке 2 (код 2)
+minimal:/$ # Скрипт без ошибок (работает с любой VFS)
+minimal:/$ ls
+hello.txt
+minimal:/$ ls -a
+.  ..  hello.txt
+minimal:/$ cal 2 2024
+   February 2024
+Su Mo Tu We Th Fr Sa
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29
 minimal:/$ exit
 [код возврата: 0]
 
@@ -157,11 +146,13 @@ $ python3 emulator.py --script scripts/stage2_error.emu
 [debug]   --vfs    = (не задан)
 [debug]   --script = scripts/stage2_error.emu
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
-default:/$ # Скрипт останавливается на первой ошибке (третья строка)
-default:/$ ls one
-ls: cannot access 'one': No such file or directory
-Скрипт остановлен: ошибка в строке 2 (код 2)
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
+default:/$ # Скрипт останавливается на первой ошибке (вторая строка)
+default:/$ ls
+etc  home  tmp
+default:/$ nosuchcmd arg
+nosuchcmd: command not found
+Скрипт остановлен: ошибка в строке 3 (код 127)
 default:/$ exit
 [код возврата: 0]
 
@@ -170,7 +161,7 @@ $ python3 emulator.py --script scripts/no_such_script.emu
 [debug]   --vfs    = (не задан)
 [debug]   --script = scripts/no_such_script.emu
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
 Ошибка: не удалось прочитать скрипт 'scripts/no_such_script.emu': No such file or directory
 [код возврата: 1]
 
@@ -180,32 +171,19 @@ emulator.py: error: unrecognized arguments: --unknown
 [код возврата: 2]
 ```
 
----
-
 ## Этап 3. VFS
 
-**Что сделано** (модуль `vfs.py`)
+- Источник — ZIP-архив (`--vfs`). Он читается в память (`zipfile` + `io.BytesIO`); на диск ничего не
+  распаковывается и не пишется, исходный ZIP не меняется.
+- Каталог — `dict`, файл — `bytes`. Двоичные данные (не UTF-8) при выводе кодируются в base64.
+- Имя VFS = имя архива без расширения (`deep.zip` → `deep`).
+- Ошибки загрузки: файл не найден, это каталог, неверный формат/повреждённый архив, небезопасный путь (`..`).
+- Нет `--vfs` — создаётся VFS по умолчанию. Служебная команда `vfs-info` показывает сведения о VFS.
+- Тестовые архивы (`tests/vfs/`, создаются `tests/make_vfs.py`): `minimal.zip` (1 файл), `files.zip` (несколько
+  файлов), `deep.zip` (вложенность до 5 уровней), `not_a_zip.zip` и `corrupt.zip` (для ошибок).
+- Скрипт реальной ОС `tests/test_stage3.sh` и стартовый скрипт всех команд `scripts/stage3_all.emu`.
 
-- Источник VFS — ZIP-архив (`--vfs PATH`). Архив **целиком читается в память** (`zipfile` + `io.BytesIO`), дерево
-  каталогов и файлов строится в оперативной памяти; на диск ничего не распаковывается и не пишется. Исходный ZIP
-  никогда не изменяется.
-- Содержимое файлов хранится как `bytes`. Файл считается двоичным, если не декодируется как UTF-8 или содержит
-  NUL; при выводе его данные представляются в **base64** (строки по 76 символов).
-- Имя VFS = имя архива без расширения (`deep.zip` → `deep`), попадает в приглашение: `deep:/$ `.
-- Ошибки загрузки: файл не найден, это каталог, неверный формат / повреждённый архив, небезопасные пути (`..`),
-  конфликт «файл/каталог» в архиве. Сообщение `Ошибка загрузки VFS: ...`, код возврата 1.
-- Если `--vfs` не указан, в памяти создаётся VFS по умолчанию (имя `default`, несколько файлов и каталогов).
-- Служебная команда `vfs-info` — имя, источник и размер VFS (нужна, чтобы увидеть, что загрузилось).
-- Расширение скриптов: строка вида `-команда` — **ожидаемая ошибка**: ошибка показывается, но скрипт продолжается
-  (без этого в одном скрипте нельзя показать несколько ошибок, ведь скрипт стоит на первой). Обычные строки по-прежнему
-  останавливают скрипт.
-- Тестовые архивы создаёт `tests/make_vfs.py` (лежат в `tests/vfs/`): `minimal.zip` (1 файл), `files.zip`
-  (несколько файлов, скрытый, двоичный, пустой каталог), `deep.zip` (вложенность до 5 уровней), `not_a_zip.zip` и
-  `corrupt.zip` (для ошибок).
-- Скрипты реальной ОС: `tests/test_stage3.sh` — все варианты VFS и все ошибки загрузки.
-  Стартовый скрипт всех команд этапов 1–3: `scripts/stage3_all.emu`.
-
-**Демонстрация** (`bash tests/test_stage3.sh`):
+Демонстрация (`bash tests/test_stage3.sh`):
 
 ```text
 
@@ -214,13 +192,11 @@ $ python3 emulator.py --script scripts/stage3_info.emu
 [debug]   --vfs    = (не задан)
 [debug]   --script = scripts/stage3_info.emu
 [debug] VFS не указана: создана VFS по умолчанию в памяти
-[debug]   имя VFS = default; каталогов: 5, файлов: 4, байт: 325
+[debug]   имя VFS = default; каталогов: 4, файлов: 3, байт: 304
 default:/$ vfs-info
 name:   default
 source: (в памяти, по умолчанию)
-dirs:   5
-files:  4
-bytes:  325
+dirs: 4, files: 3, bytes: 304
 default:/$ ls
 etc  home  tmp
 default:/$ exit
@@ -234,9 +210,7 @@ $ python3 emulator.py --vfs tests/vfs/minimal.zip --script scripts/stage3_info.e
 minimal:/$ vfs-info
 name:   minimal
 source: tests/vfs/minimal.zip
-dirs:   0
-files:  1
-bytes:  12
+dirs: 0, files: 1, bytes: 12
 minimal:/$ ls
 hello.txt
 minimal:/$ exit
@@ -250,9 +224,7 @@ $ python3 emulator.py --vfs tests/vfs/files.zip --script scripts/stage3_info.emu
 files:/$ vfs-info
 name:   files
 source: tests/vfs/files.zip
-dirs:   1
-files:  6
-bytes:  1122
+dirs: 1, files: 6, bytes: 1122
 files:/$ ls
 empty  log.txt  logo.bin  no_newline.txt  readme.txt  short.txt
 files:/$ exit
@@ -266,9 +238,7 @@ $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage3_info.emu
 deep:/$ vfs-info
 name:   deep
 source: tests/vfs/deep.zip
-dirs:   12
-files:  9
-bytes:  183
+dirs: 12, files: 9, bytes: 183
 deep:/$ ls
 a  etc  projects  README.md  tmp
 deep:/$ exit
@@ -307,45 +277,62 @@ $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage3_all.emu
 [debug]   --vfs    = tests/vfs/deep.zip
 [debug]   --script = scripts/stage3_all.emu
 [debug]   имя VFS = deep; каталогов: 12, файлов: 9, байт: 183
-deep:/$ # Все команды этапов 1-3 (успешные режимы) + ожидаемые ошибки (строки с '-')
+deep:/$ # Все команды этапов 1-3 (запуск с deep.zip). Строки с '-' — ожидаемые ошибки.
 deep:/$ vfs-info
 name:   deep
 source: tests/vfs/deep.zip
-dirs:   12
-files:  9
-bytes:  183
+dirs: 12, files: 9, bytes: 183
 deep:/$ ls
 a  etc  projects  README.md  tmp
-deep:/$ ls -l /home "my dir"
-ls: cannot access '/home': No such file or directory
-ls: cannot access 'my dir': No such file or directory
-Скрипт остановлен: ошибка в строке 4 (код 2)
+deep:/$ ls -l a
+d  4096 b
+deep:/$ cd projects/app
+deep:/projects/app$ ls
+README.md  src
+deep:/projects/app$ cd /
+deep:/$ ls $HOME
+ls: cannot access '/home/rid': No such file or directory
+[ожидаемая ошибка, код 2; скрипт продолжается]
+deep:/$ ls "$HOME и ${USER}"
+ls: cannot access '/home/rid и rid': No such file or directory
+[ожидаемая ошибка, код 2; скрипт продолжается]
+deep:/$ vfs-info extra
+vfs-info: too many arguments
+[ожидаемая ошибка, код 1; скрипт продолжается]
+deep:/$ unknown_cmd 1 2
+unknown_cmd: command not found
+[ожидаемая ошибка, код 127; скрипт продолжается]
+deep:/$ ls "незакрытая кавычка
+parse error: No closing quotation
+[ожидаемая ошибка, код 2; скрипт продолжается]
+deep:/$ exit abc
+exit: abc: numeric argument required
+[ожидаемая ошибка, код 2; скрипт продолжается]
+deep:/$ exit 1 2
+exit: too many arguments
+[ожидаемая ошибка, код 1; скрипт продолжается]
+deep:/$ # обычная ошибка останавливает скрипт
+deep:/$ nosuchcmd
+nosuchcmd: command not found
+Скрипт остановлен: ошибка в строке 16 (код 127)
 deep:/$ exit
 [код возврата: 0]
 ```
 
----
-
 ## Этап 4. Основные команды
-
-**Что сделано** (`commands.py`). Сообщения об ошибках — в формате coreutils (на английском), как в настоящей оболочке.
 
 | Команда | Режимы |
 |---|---|
-| `ls [-l] [-a] [путь...]` | текущий каталог; каталог; файл; несколько путей (файлы, затем каталоги с заголовками `путь:`); `-a` — скрытые файлы и `.`/`..`; `-l` — длинный формат (тип/права условные, размер, имя); `-la`; `--`. Вывод в столбцах по ширине терминала. |
-| `cd [путь \| -]` | без аргументов — корень VFS; абсолютные/относительные пути, `.`/`..`; `cd -` — предыдущий каталог (печатает его). Приглашение показывает текущий каталог. |
-| `cal [-m] [[месяц] год]` | без аргументов — текущий месяц; `год` — весь год; `месяц год` (число 1–12 или имя `Feb`/`February`); `-m` — неделя с понедельника. |
-| `tail [-n N \| -n +N \| -N] [-q] файл...` | последние 10 строк; `-n N`/`-N` — последние N; `-n +N` — начиная со строки N; несколько файлов с заголовками `==> имя <==` (`-q` — без заголовков); двоичные файлы выводятся в base64. |
+| `ls [-l] [-a] [путь ...]` | текущий каталог, каталог, файл, несколько путей (с заголовками); `-a` — скрытые файлы и `.`/`..`; `-l` — тип, размер, имя |
+| `cd [путь]` | без аргумента — корень VFS; абсолютные и относительные пути, `.`, `..` |
+| `cal [[месяц] год]` | без аргументов — текущий месяц; `год` — весь год; `месяц год` |
+| `tail [-n N] файл ...` | последние 10 строк или N; несколько файлов — с заголовками `==> имя <==`; двоичный файл — base64 |
 
-Особенности: ввод — только аргументы (конвейеров и `stdin` нет); если последняя строка файла без `\n`,
-`tail` добавляет перевод строки, чтобы приглашение не «прилипало» к выводу.
-Обрабатываемые ошибки: несуществующий путь, `cd` в файл, `tail` каталога, неверное число/опция, лишние аргументы,
-неверный месяц/год и т. д.
+Сообщения об ошибках — как в coreutils. Обрабатываются: несуществующий путь, `cd` в файл, `tail` каталога,
+неверное число/опция, лишние аргументы, неверный месяц/год.
 
-**Стартовый скрипт:** `scripts/stage4_commands.emu` (VFS `deep.zip`, все режимы и ошибки).
-Запуск: `python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage4_commands.emu`.
-
-**Демонстрация** (результат `cal` без аргументов зависит от текущей даты):
+Запуск: `python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage4_commands.emu`
+(`cal` без аргументов зависит от текущей даты).
 
 ```text
 $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage4_commands.emu
@@ -353,60 +340,41 @@ $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage4_commands.
 [debug]   --vfs    = tests/vfs/deep.zip
 [debug]   --script = scripts/stage4_commands.emu
 [debug]   имя VFS = deep; каталогов: 12, файлов: 9, байт: 183
-deep:/$ # Этап 4: ls, cd, cal, tail на VFS deep.zip. Запуск:
-deep:/$ #   python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage4_commands.emu
-deep:/$ # ---------- ls ----------
+deep:/$ # Этап 4: ls, cd, cal, tail (запуск с deep.zip). Строки с '-' — ожидаемые ошибки.
 deep:/$ ls
 a  etc  projects  README.md  tmp
 deep:/$ ls -l
-drwxr-xr-x 4096 a
-drwxr-xr-x 4096 etc
-drwxr-xr-x 4096 projects
--rw-r--r--    7 README.md
-drwxr-xr-x 4096 tmp
+d  4096 a
+d  4096 etc
+d  4096 projects
+-     7 README.md
+d  4096 tmp
 deep:/$ ls -a
 .  ..  a  etc  projects  README.md  tmp
 deep:/$ ls -la projects
-drwxr-xr-x 4096 .
-drwxr-xr-x 4096 ..
-drwxr-xr-x 4096 app
-drwxr-xr-x 4096 empty_dir
-drwxr-xr-x 4096 lib
+d  4096 .
+d  4096 ..
+d  4096 app
+d  4096 empty_dir
+d  4096 lib
 deep:/$ ls projects/app projects/lib
 projects/app:
 README.md  src
 
 projects/lib:
 readme.txt
-deep:/$ ls README.md projects
-README.md
-
-projects:
-app  empty_dir  lib
 deep:/$ ls a/b/c/d/deep.txt
 a/b/c/d/deep.txt
-deep:/$ ls -l /a/b/c
-drwxr-xr-x 4096 d
--rw-r--r--   87 note.txt
-deep:/$ ls -- projects
-app  empty_dir  lib
-deep:/$ # ---------- cd ----------
 deep:/$ cd projects
 deep:/projects$ cd app/src
 deep:/projects/app/src$ ls -l
--rw-r--r-- 12 main.py
--rw-r--r-- 22 util.py
-deep:/projects/app/src$ cd ..
-deep:/projects/app$ cd ../..
-deep:/$ cd -
-/projects/app
-deep:/projects/app$ cd -
-/
-deep:/$ cd /a/b/c/d
+-    12 main.py
+-    22 util.py
+deep:/projects/app/src$ cd ../..
+deep:/projects$ cd /a/b/c/d
 deep:/a/b/c/d$ ls
 deep.txt
 deep:/a/b/c/d$ cd
-deep:/$ # ---------- tail ----------
 deep:/$ cd /a/b/c
 deep:/a/b/c$ tail note.txt
 note 3
@@ -420,14 +388,6 @@ note 10
 note 11
 note 12
 deep:/a/b/c$ tail -n 3 note.txt
-note 10
-note 11
-note 12
-deep:/a/b/c$ tail -3 note.txt
-note 10
-note 11
-note 12
-deep:/a/b/c$ tail -n +10 note.txt
 note 10
 note 11
 note 12
@@ -447,21 +407,6 @@ note 12
 
 ==> d/deep.txt <==
 Файл на 5-м уровне
-deep:/a/b/c$ tail -q note.txt ../mid.txt
-note 3
-note 4
-note 5
-note 6
-note 7
-note 8
-note 9
-note 10
-note 11
-note 12
-mid
-deep:/a/b/c$ tail -n 1 /README.md
-# deep
-deep:/a/b/c$ # ---------- cal ----------
 deep:/a/b/c$ cal 2 2024
    February 2024
 Su Mo Tu We Th Fr Sa
@@ -470,21 +415,6 @@ Su Mo Tu We Th Fr Sa
 11 12 13 14 15 16 17
 18 19 20 21 22 23 24
 25 26 27 28 29
-deep:/a/b/c$ cal -m 10 2026
-    October 2026
-Mo Tu We Th Fr Sa Su
-          1  2  3  4
- 5  6  7  8  9 10 11
-12 13 14 15 16 17 18
-19 20 21 22 23 24 25
-26 27 28 29 30 31
-deep:/a/b/c$ cal Feb 2026
-   February 2026
-Su Mo Tu We Th Fr Sa
- 1  2  3  4  5  6  7
- 8  9 10 11 12 13 14
-15 16 17 18 19 20 21
-22 23 24 25 26 27 28
 deep:/a/b/c$ cal 2026
                                   2026
 
@@ -530,19 +460,11 @@ Su Mo Tu We Th Fr Sa
 18 19 20 21 22 23 24
 25 26 27 28 29 30 31
 deep:/a/b/c$ cd /
-deep:/$ # ---------- ошибки (ожидаемые, скрипт продолжается) ----------
 deep:/$ ls /nope
 ls: cannot access '/nope': No such file or directory
 [ожидаемая ошибка, код 2; скрипт продолжается]
 deep:/$ ls -z
 ls: invalid option -- 'z'
-[ожидаемая ошибка, код 2; скрипт продолжается]
-deep:/$ ls projects /nope README.md
-ls: cannot access '/nope': No such file or directory
-README.md
-
-projects:
-app  empty_dir  lib
 [ожидаемая ошибка, код 2; скрипт продолжается]
 deep:/$ cd /nope
 cd: /nope: No such file or directory
@@ -553,72 +475,48 @@ cd: README.md: Not a directory
 deep:/$ cd a b
 cd: too many arguments
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ cd -x
-cd: -x: invalid option
-[ожидаемая ошибка, код 2; скрипт продолжается]
 deep:/$ tail
 tail: missing file operand
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ tail nofile.txt
 tail: cannot open 'nofile.txt' for reading: No such file or directory
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ tail d
-tail: cannot open 'd' for reading: No such file or directory
+deep:/$ tail a
+tail: error reading 'a': Is a directory
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ tail -n abc note.txt
+deep:/$ tail -n abc README.md
 tail: invalid number of lines: 'abc'
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ tail -n
 tail: option requires an argument -- 'n'
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ tail -z note.txt
-tail: invalid option -- 'z'
-[ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ cal 13 2026
-cal: 13 is neither a month number (1..12) nor a name
+cal: 13 is not a month number (1..12)
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ cal 5 0
 cal: year '0' not in range 1..9999
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ cal abc
-cal: year 'abc' not in range 1..9999
+cal: usage: cal [[месяц] год]  (числа)
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ cal 1 2 3
-cal: too many arguments
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ cal -x
-cal: invalid option -- 'x'
+cal: usage: cal [[месяц] год]  (числа)
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ exit
 [код возврата: 0]
 ```
 
----
-
 ## Этап 5. Дополнительные команды
 
-**Что сделано:** команда `mv`, изменяющая VFS только в памяти (исходный ZIP не затрагивается).
+`mv источник назначение` — переименование или перенос файла/каталога. Если назначение — существующий каталог,
+источник переносится внутрь него. Файл можно заменить файлом; остальные случаи «поверх существующего» — ошибка.
+Изменяется только VFS в памяти, исходный ZIP остаётся прежним.
 
-| Режим | Пример |
-|---|---|
-| переименование файла/каталога | `mv README.md INTRO.md` |
-| перемещение в существующий каталог | `mv INTRO.md tmp` |
-| перемещение с переименованием | `mv tmp/INTRO.md projects/lib/intro.txt` |
-| несколько источников в каталог | `mv a/b/mid.txt a/b/c/note.txt tmp` |
-| каталог целиком | `mv projects/app /etc` |
-| перезапись существующего файла (по умолчанию) / запрет `-n` | `mv x y` / `mv -n x y` |
-| подробный вывод `-v` | `mv -v x dir` → `'x' -> 'dir/x'` |
-| окончание опций `--` | `mv -- tmp/archive projects` |
+Обрабатываемые ошибки: нет операндов/назначения, лишние аргументы, источник не найден, источник и цель совпадают,
+каталог в самого себя, перезапись каталога или каталогом, несуществующий родитель назначения, путь через файл,
+перемещение корня и каталога, содержащего текущий.
 
-Обрабатываемые ошибки: нет операндов / нет назначения; источник не найден; неверная опция; источник и цель совпадают;
-каталог в самого себя; несколько источников в «не каталог»; каталог поверх файла и файл поверх каталога;
-непустой каталог-цель; несуществующий родитель; путь через файл; перемещение корня; перемещение каталога,
-содержащего текущий (`it contains the current directory` — ограничение эмулятора).
-
-**Стартовый скрипт:** `scripts/stage5_mv.emu` (все режимы `mv` и ошибки). Запуск:
-`python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu`. Исходный ZIP не меняется: новый запуск снова видит исходную структуру.
-
-**Демонстрация** (вывод запуска):
+Запуск: `python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu`
 
 ```text
 $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu
@@ -626,36 +524,19 @@ $ python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu
 [debug]   --vfs    = tests/vfs/deep.zip
 [debug]   --script = scripts/stage5_mv.emu
 [debug]   имя VFS = deep; каталогов: 12, файлов: 9, байт: 183
-deep:/$ # Этап 5: mv, изменения только в памяти. Запуск:
-deep:/$ #   python3 emulator.py --vfs tests/vfs/deep.zip --script scripts/stage5_mv.emu
+deep:/$ # Этап 5: mv (запуск с deep.zip). Изменения только в памяти. Строки с '-' — ожидаемые ошибки.
 deep:/$ ls
 a  etc  projects  README.md  tmp
-deep:/$ # ---------- переименование файла ----------
 deep:/$ mv README.md INTRO.md
 deep:/$ ls
 a  etc  INTRO.md  projects  tmp
-deep:/$ # ---------- перемещение файла в каталог (-v показывает действие) ----------
-deep:/$ mv -v INTRO.md tmp
-'INTRO.md' -> 'tmp/INTRO.md'
+deep:/$ mv INTRO.md tmp
 deep:/$ ls tmp
 INTRO.md
-deep:/$ # ---------- переименование + перемещение в другой каталог ----------
 deep:/$ mv tmp/INTRO.md projects/lib/intro.txt
 deep:/$ ls projects/lib
 intro.txt  readme.txt
-deep:/$ # ---------- несколько источников в каталог ----------
-deep:/$ mv -v a/b/mid.txt a/b/c/note.txt tmp
-'a/b/mid.txt' -> 'tmp/mid.txt'
-'a/b/c/note.txt' -> 'tmp/note.txt'
-deep:/$ ls tmp
-mid.txt  note.txt
-deep:/$ ls a/b a/b/c
-a/b:
-c
-
-a/b/c:
-d
-deep:/$ # ---------- переименование и перемещение каталога ----------
+deep:/$ mv a/b/mid.txt tmp
 deep:/$ mv projects/empty_dir projects/archive
 deep:/$ mv projects/archive tmp
 deep:/$ ls projects tmp
@@ -663,10 +544,8 @@ projects:
 app  lib
 
 tmp:
-archive  mid.txt  note.txt
-deep:/$ # ---------- каталог с содержимым ----------
-deep:/$ mv -v projects/app /etc
-'projects/app' -> '/etc/app'
+archive  mid.txt
+deep:/$ mv projects/app /etc
 deep:/$ ls etc etc/app/src
 etc:
 app  config
@@ -681,75 +560,36 @@ util.py
 
 ..:
 main_copy.py  README.md  src
-deep:/etc/app/src$ tail ../main_copy.py
-print('hi')
 deep:/etc/app/src$ cd /
-deep:/$ # ---------- перезапись файла и режим -n ----------
-deep:/$ mv tmp/mid.txt tmp/note.txt
-deep:/$ tail tmp/note.txt
+deep:/$ mv tmp/mid.txt projects/lib/intro.txt
+deep:/$ tail projects/lib/intro.txt
 mid
-deep:/$ mv -n projects/lib/intro.txt tmp/note.txt
-deep:/$ tail tmp/note.txt
-mid
-deep:/$ mv -v projects/lib/intro.txt tmp/note.txt
-'projects/lib/intro.txt' -> 'tmp/note.txt'
-deep:/$ tail tmp/note.txt
-# deep
-deep:/$ # ---------- '--' и перемещение каталога ----------
-deep:/$ mv -- tmp/archive projects
-deep:/$ ls projects
-archive  lib
-deep:/$ # ---------- подготовка к ошибкам ----------
-deep:/$ mv tmp/note.txt tmp/app
-deep:/$ mv projects/archive projects/src
-deep:/$ ls tmp projects
-projects:
-lib  src
-
-tmp:
-app
-deep:/$ # ---------- ошибки (ожидаемые, скрипт продолжается) ----------
 deep:/$ mv
 mv: missing file operand
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv a
 mv: missing destination file operand after 'a'
 [ожидаемая ошибка, код 1; скрипт продолжается]
+deep:/$ mv a b c
+mv: too many arguments
+[ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv nofile tmp
 mv: cannot stat 'nofile': No such file or directory
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv -z a tmp
-mv: invalid option -- 'z'
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv a/b/c/d/deep.txt a/b/c/d/deep.txt
 mv: 'a/b/c/d/deep.txt' and 'a/b/c/d/deep.txt' are the same file
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv a a/b/c
-mv: cannot move 'a' to a subdirectory of itself, 'a/b/c/a'
+mv: cannot move 'a' to a subdirectory of itself
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv a/b a/b/c/d/deep.txt
-mv: cannot move 'a/b' to a subdirectory of itself, 'a/b/c/d/deep.txt'
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv a/b/c/d/deep.txt etc/app/README.md projects/lib/readme.txt
-mv: target 'projects/lib/readme.txt' is not a directory
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv etc/app tmp/app
-mv: cannot overwrite non-directory 'tmp/app' with directory 'etc/app'
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv tmp/app etc
-mv: cannot overwrite directory 'etc/app' with non-directory
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv projects/src etc/app
-mv: cannot move 'projects/src' to 'etc/app/src': Directory not empty
+deep:/$ mv etc projects/lib/readme.txt
+mv: cannot overwrite 'projects/lib/readme.txt': already exists
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv a/b/c/d projects/lib/x/y
 mv: cannot move 'a/b/c/d' to 'projects/lib/x/y': No such file or directory
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv a/b/c/d/deep.txt/x tmp
 mv: cannot stat 'a/b/c/d/deep.txt/x': Not a directory
-[ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/$ mv a/b/c/d/deep.txt tmp/newname/
-mv: cannot move to 'tmp/newname/': Not a directory
 [ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/$ mv / tmp
 mv: cannot move the root directory
@@ -758,19 +598,11 @@ deep:/$ cd a/b
 deep:/a/b$ mv /a /tmp
 mv: cannot move '/a': it contains the current directory
 [ожидаемая ошибка, код 1; скрипт продолжается]
-deep:/a/b$ mv .. /tmp
-mv: cannot move '..': it contains the current directory
-[ожидаемая ошибка, код 1; скрипт продолжается]
 deep:/a/b$ cd /
-deep:/$ # ---------- состояние после ошибок не повреждено ----------
 deep:/$ ls
 a  etc  projects  tmp
-deep:/$ ls a/b/c/d etc/app
-a/b/c/d:
+deep:/$ ls a/b/c/d
 deep.txt
-
-etc/app:
-main_copy.py  README.md  src
 deep:/$ exit
 [код возврата: 0]
 ```
