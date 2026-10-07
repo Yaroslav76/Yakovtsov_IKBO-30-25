@@ -1,0 +1,35 @@
+# Этап 5: mv (запуск с deep.zip). Изменения только в памяти. Строки с '-' — ожидаемые ошибки.
+ls
+mv README.md INTRO.md
+ls
+mv INTRO.md tmp
+ls tmp
+mv tmp/INTRO.md projects/lib/intro.txt
+ls projects/lib
+mv a/b/mid.txt tmp
+mv projects/empty_dir projects/archive
+mv projects/archive tmp
+ls projects tmp
+mv projects/app /etc
+ls etc etc/app/src
+cd /etc/app/src
+mv main.py ../main_copy.py
+ls . ..
+cd /
+mv tmp/mid.txt projects/lib/intro.txt
+tail projects/lib/intro.txt
+-mv
+-mv a
+-mv a b c
+-mv nofile tmp
+-mv a/b/c/d/deep.txt a/b/c/d/deep.txt
+-mv a a/b/c
+-mv etc projects/lib/readme.txt
+-mv a/b/c/d projects/lib/x/y
+-mv a/b/c/d/deep.txt/x tmp
+-mv / tmp
+cd a/b
+-mv /a /tmp
+cd /
+ls
+ls a/b/c/d

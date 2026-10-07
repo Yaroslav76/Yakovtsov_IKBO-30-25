@@ -1,0 +1,37 @@
+# Этап 4: ls, cd, cal, tail (запуск с deep.zip). Строки с '-' — ожидаемые ошибки.
+ls
+ls -l
+ls -a
+ls -la projects
+ls projects/app projects/lib
+ls a/b/c/d/deep.txt
+cd projects
+cd app/src
+ls -l
+cd ../..
+cd /a/b/c/d
+ls
+cd
+cd /a/b/c
+tail note.txt
+tail -n 3 note.txt
+tail -n 0 note.txt
+tail note.txt d/deep.txt
+cal 2 2024
+cal 2026
+cal
+cd /
+-ls /nope
+-ls -z
+-cd /nope
+-cd README.md
+-cd a b
+-tail
+-tail nofile.txt
+-tail a
+-tail -n abc README.md
+-tail -n
+-cal 13 2026
+-cal 5 0
+-cal abc
+-cal 1 2 3

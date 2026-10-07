@@ -1,0 +1,11 @@
+ls
+ls -l /home
+cd home/user
+ls $HOME ${USER} "$HOME/x" '$NO_EXPANSION'
+cd
+# комментарий
+foo bar
+ls "незакрытая
+exit abc
+exit 1 2
+exit 3

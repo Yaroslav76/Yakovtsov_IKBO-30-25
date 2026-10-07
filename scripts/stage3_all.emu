@@ -1,0 +1,17 @@
+# Все команды этапов 1-3 (запуск с deep.zip). Строки с '-' — ожидаемые ошибки.
+vfs-info
+ls
+ls -l a
+cd projects/app
+ls
+cd /
+-ls $HOME
+-ls "$HOME и ${USER}"
+-vfs-info extra
+-unknown_cmd 1 2
+-ls "незакрытая кавычка
+-exit abc
+-exit 1 2
+# обычная ошибка останавливает скрипт
+nosuchcmd
+ls эта-строка-не-выполнится
