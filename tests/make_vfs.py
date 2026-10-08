@@ -1,30 +1,49 @@
 #!/usr/bin/env python3
-"""Создаёт тестовые VFS-архивы в tests/vfs/ (запуск: python3 tests/make_vfs.py)."""
+"""Создаёт тестовые VFS-архивы в tests/vfs/."""
+"""Запуск: python3 tests/make_vfs.py."""
+
 import os
 import zipfile
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vfs")
-DATE = (2026, 1, 1, 0, 0, 0)  # фиксированная дата — архивы воспроизводимы
+"""Папка для создаваемых архивов."""
+OUT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "vfs"
+)
+
+"""Фиксированная дата для воспроизводимости архивов."""
+DATE = (2026, 1, 1, 0, 0, 0)
 
 
+"""Создаёт ZIP-архив с указанными файлами и каталогами."""
 def build(name, files, dirs=()):
-    with zipfile.ZipFile(os.path.join(OUT, name), "w", zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(
+        os.path.join(OUT, name), "w", zipfile.ZIP_DEFLATED
+    ) as z:
         for d in dirs:
-            z.writestr(zipfile.ZipInfo(d.rstrip("/") + "/", DATE), b"")
+            z.writestr(
+                zipfile.ZipInfo(d.rstrip("/") + "/", DATE), b""
+            )
         for path, data in files.items():
             z.writestr(zipfile.ZipInfo(path, DATE), data)
 
 
+"""Создаёт указанное количество строк."""
 def lines(n, prefix="line"):
-    return "".join(f"{prefix} {i}\n" for i in range(1, n + 1)).encode()
+    return "".join(
+        f"{prefix} {i}\n" for i in range(1, n + 1)
+    ).encode()
 
 
 os.makedirs(OUT, exist_ok=True)
 
-# 1. Минимальный: один файл
-build("minimal.zip", {"hello.txt": "Hello, VFS!\n".encode()})
 
-# 2. Несколько файлов в корне, скрытый файл, двоичный файл, пустой каталог
+"""Минимальный архив: один файл."""
+build("minimal.zip", {
+    "hello.txt": "Hello, VFS!\n".encode()
+})
+
+
+"""Архив с несколькими файлами."""
 build("files.zip", {
     "readme.txt": "Это VFS с несколькими файлами.\n".encode(),
     "log.txt": lines(25, "запись журнала"),
@@ -34,7 +53,8 @@ build("files.zip", {
     "logo.bin": bytes(range(256)),
 }, dirs=["empty/"])
 
-# 3. Глубокая вложенность (не менее 3 уровней)
+
+"""Архив с глубокой вложенностью каталогов."""
 build("deep.zip", {
     "README.md": b"# deep\n",
     "a/b/c/d/deep.txt": "Файл на 5-м уровне\n".encode(),
@@ -47,9 +67,22 @@ build("deep.zip", {
     "etc/config/app.conf": b"debug=true\n",
 }, dirs=["projects/empty_dir/", "tmp/"])
 
-# Некорректные источники
-with open(os.path.join(OUT, "not_a_zip.zip"), "wb") as f:
+
+"""Создаёт файл, который не является ZIP-архивом."""
+with open(
+    os.path.join(OUT, "not_a_zip.zip"), "wb"
+) as f:
     f.write("Это обычный текст, а не ZIP-архив\n".encode())
-with open(os.path.join(OUT, "minimal.zip"), "rb") as src, open(os.path.join(OUT, "corrupt.zip"), "wb") as dst:
-    dst.write(src.read()[:-30])  # обрезан конец — нет центрального каталога
-print("Готово:", ", ".join(sorted(os.listdir(OUT))))
+
+
+"""Создаёт повреждённую копию минимального архива."""
+with open(os.path.join(OUT, "minimal.zip"), "rb") as src:
+    with open(
+        os.path.join(OUT, "corrupt.zip"), "wb"
+    ) as dst:
+        dst.write(src.read()[:-30])
+
+
+print(
+    "Готово:", ", ".join(sorted(os.listdir(OUT)))
+)
